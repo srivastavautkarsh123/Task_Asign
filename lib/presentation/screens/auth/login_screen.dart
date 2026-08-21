@@ -198,6 +198,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               onPressed: () => _fillCredentials('ramesh.member@nimbusdigital.test', 'Password123!'),
                             ),
                             ActionChip(
+                              label: const Text('Org A Member (Rinki)', style: TextStyle(fontSize: 11)),
+                              onPressed: () => _fillCredentials('rinki.member@nimbusdigital.test', 'Password123!'),
+                            ),
+                            ActionChip(
                               label: const Text('Org B Admin (Shivani)', style: TextStyle(fontSize: 11)),
                               onPressed: () => _fillCredentials('shivani.admin@harborlightstudios.test', 'Password123!'),
                             ),

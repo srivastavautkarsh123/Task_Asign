@@ -330,6 +330,12 @@
 				"role": "member"
 			},
 			{
+				"email": "rinki.member@nimbusdigital.test",
+				"password": "Password123!",
+				"org_id": "org_a1b2c3",
+				"role": "member"
+			},
+			{
 				"email": "shivani.admin@harborlightstudios.test",
 				"password": "Password123!",
 				"org_id": "org_d4e5f6",
