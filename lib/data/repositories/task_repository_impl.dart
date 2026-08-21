@@ -5,6 +5,7 @@ import '../../domain/entities/user.dart';
 import '../../domain/entities/comment.dart';
 import '../../domain/entities/user_session.dart';
 import '../../domain/repositories/i_task_repository.dart';
+import '../../domain/repositories/i_notification_repository.dart';
 import '../datasources/mock_data_source.dart';
 import '../datasources/local_storage_data_source.dart';
 import '../models/task_dto.dart';
@@ -13,6 +14,7 @@ import '../models/comment_dto.dart';
 class TaskRepositoryImpl implements ITaskRepository {
   final MockDataSource _mockDataSource;
   final LocalStorageDataSource _localStorage;
+  final INotificationRepository? _notificationRepository;
 
   List<TaskDto>? _inMemoryTasks;
   List<CommentDto>? _inMemoryComments;
@@ -20,8 +22,10 @@ class TaskRepositoryImpl implements ITaskRepository {
   TaskRepositoryImpl({
     required MockDataSource mockDataSource,
     required LocalStorageDataSource localStorage,
+    INotificationRepository? notificationRepository,
   })  : _mockDataSource = mockDataSource,
-        _localStorage = localStorage;
+        _localStorage = localStorage,
+        _notificationRepository = notificationRepository;
 
   Future<void> _ensureLoaded() async {
     if (_inMemoryTasks == null) {
@@ -33,6 +37,16 @@ class TaskRepositoryImpl implements ITaskRepository {
       final commentsFromSource = await _mockDataSource.getComments();
       _inMemoryComments = List.from(commentsFromSource);
     }
+  }
+
+  Result<void>? _validateDueDate(DateTime dueDate) {
+    final now = DateTime.now();
+    final todayMidnight = DateTime(now.year, now.month, now.day);
+    final taskDate = DateTime(dueDate.year, dueDate.month, dueDate.day);
+    if (taskDate.isBefore(todayMidnight)) {
+      return const Error(ValidationError("Task due date cannot be in the past."));
+    }
+    return null;
   }
 
   @override
@@ -107,6 +121,10 @@ class TaskRepositoryImpl implements ITaskRepository {
     try {
       await _ensureLoaded();
 
+      // Due Date validation guard (cannot be older than today)
+      final dateErr = _validateDueDate(task.dueDate);
+      if (dateErr != null) return dateErr.cast();
+
       // Org member assignment validation guard
       if (task.assigneeId != null) {
         final validationRes = await _validateAssigneeOrgMembership(session.orgId, task.assigneeId!);
@@ -116,6 +134,15 @@ class TaskRepositoryImpl implements ITaskRepository {
       final newDto = TaskDto.fromEntity(task);
       _inMemoryTasks!.insert(0, newDto);
       await _localStorage.saveTasks(_inMemoryTasks!);
+
+      // Generate assignment notification for the assigned member
+      if (_notificationRepository != null && task.assigneeId != null) {
+        await _notificationRepository!.addNotification(
+          userId: task.assigneeId!,
+          taskId: task.id,
+          message: '${session.user.name} assigned you to "${task.title}"',
+        );
+      }
 
       return Success(newDto.toEntity());
     } catch (e) {
@@ -128,6 +155,9 @@ class TaskRepositoryImpl implements ITaskRepository {
     try {
       await _ensureLoaded();
 
+      final dateErr = _validateDueDate(task.dueDate);
+      if (dateErr != null) return dateErr.cast();
+
       if (task.assigneeId != null) {
         final validationRes = await _validateAssigneeOrgMembership(session.orgId, task.assigneeId!);
         if (validationRes.isFailure) return Error(validationRes.failureOrNull!);
@@ -138,9 +168,22 @@ class TaskRepositoryImpl implements ITaskRepository {
         return const Error(NotFoundFailure("Task not found for update."));
       }
 
+      final previousAssignee = _inMemoryTasks![index].assigneeId;
+
       final updatedDto = TaskDto.fromEntity(task);
       _inMemoryTasks![index] = updatedDto;
       await _localStorage.saveTasks(_inMemoryTasks!);
+
+      // If assigned to a new assignee, generate assignment notification
+      if (_notificationRepository != null &&
+          task.assigneeId != null &&
+          task.assigneeId != previousAssignee) {
+        await _notificationRepository!.addNotification(
+          userId: task.assigneeId!,
+          taskId: task.id,
+          message: '${session.user.name} assigned you to "${task.title}"',
+        );
+      }
 
       return Success(updatedDto.toEntity());
     } catch (e) {
@@ -182,6 +225,15 @@ class TaskRepositoryImpl implements ITaskRepository {
       final updatedDto = TaskDto.fromEntity(updated);
       _inMemoryTasks![index] = updatedDto;
       await _localStorage.saveTasks(_inMemoryTasks!);
+
+      // Send live notification to assigned member
+      if (_notificationRepository != null && assigneeId != null && assigneeId != current.assigneeId) {
+        await _notificationRepository!.addNotification(
+          userId: assigneeId,
+          taskId: taskId,
+          message: '${session.user.name} assigned you to "${current.title}"',
+        );
+      }
 
       return Success(updated);
     } catch (e) {
@@ -243,5 +295,14 @@ class TaskRepositoryImpl implements ITaskRepository {
     } catch (e) {
       return Error(ServerFailure("Failed to add comment: $e"));
     }
+  }
+}
+
+extension _ResultCastExt<T> on Result<void> {
+  Result<T> cast<T>() {
+    if (isFailure) {
+      return Error(failureOrNull!);
+    }
+    throw StateError("Cannot cast Success<void> to Success<$T>");
   }
 }

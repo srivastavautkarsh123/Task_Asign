@@ -69,6 +69,16 @@ class _CreateEditTaskScreenState extends ConsumerState<CreateEditTaskScreen> {
       return;
     }
 
+    final now = DateTime.now();
+    final todayMidnight = DateTime(now.year, now.month, now.day);
+    final taskDate = DateTime(_selectedDueDate.year, _selectedDueDate.month, _selectedDueDate.day);
+    if (taskDate.isBefore(todayMidnight)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Due date cannot be in the past.'), backgroundColor: AppColors.error),
+      );
+      return;
+    }
+
     final authState = ref.read(authStateProvider);
     if (authState is! Authenticated) return;
 
@@ -265,10 +275,14 @@ class _CreateEditTaskScreenState extends ConsumerState<CreateEditTaskScreen> {
                     icon: const Icon(Icons.calendar_today_rounded, size: 16),
                     label: const Text('Pick Date'),
                     onPressed: () async {
+                      final now = DateTime.now();
+                      final todayMidnight = DateTime(now.year, now.month, now.day);
+                      final initial = _selectedDueDate.isBefore(todayMidnight) ? todayMidnight : _selectedDueDate;
+
                       final picked = await showDatePicker(
                         context: context,
-                        initialDate: _selectedDueDate,
-                        firstDate: DateTime.now().subtract(const Duration(days: 30)),
+                        initialDate: initial,
+                        firstDate: todayMidnight,
                         lastDate: DateTime(2030),
                       );
                       if (picked != null) {

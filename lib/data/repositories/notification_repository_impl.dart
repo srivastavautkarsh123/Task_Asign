@@ -57,4 +57,28 @@ class NotificationRepositoryImpl implements INotificationRepository {
       return Error(ServerFailure("Failed to update notification: $e"));
     }
   }
+
+  @override
+  Future<Result<NotificationItem>> addNotification({
+    required String userId,
+    required String taskId,
+    required String message,
+  }) async {
+    try {
+      await _ensureLoaded();
+      final newNotif = NotificationDto(
+        id: "notif_${DateTime.now().millisecondsSinceEpoch}",
+        userId: userId,
+        type: "task_assigned",
+        taskId: taskId,
+        message: message,
+        read: false,
+        createdAt: DateTime.now().toIso8601String(),
+      );
+      _inMemoryNotifications!.insert(0, newNotif);
+      return Success(newNotif.toEntity());
+    } catch (e) {
+      return Error(ServerFailure("Failed to create notification: $e"));
+    }
+  }
 }

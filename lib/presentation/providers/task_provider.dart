@@ -9,6 +9,7 @@ import '../../domain/entities/user_session.dart';
 import '../../domain/repositories/i_task_repository.dart';
 import 'debug_settings_provider.dart';
 import 'project_provider.dart';
+import 'notification_provider.dart';
 
 class TaskFilterState {
   final TaskStatus? statusFilter;
@@ -124,7 +125,6 @@ class TaskListNotifier extends StateNotifier<TaskListState> {
     if (current is TaskListSuccess) {
       _applyFiltersAndEmit(current.allTasks, newFilters);
     } else if (current is TaskListEmpty) {
-      // Re-apply on empty
       _applyFiltersAndEmit([], newFilters);
     }
   }
@@ -219,7 +219,12 @@ class TaskListNotifier extends StateNotifier<TaskListState> {
 final taskRepositoryProvider = Provider<ITaskRepository>((ref) {
   final mockDs = ref.watch(mockDataSourceProvider);
   final localDs = ref.watch(localStorageDataSourceProvider);
-  return TaskRepositoryImpl(mockDataSource: mockDs, localStorage: localDs);
+  final notifRepo = ref.watch(notificationRepositoryProvider);
+  return TaskRepositoryImpl(
+    mockDataSource: mockDs,
+    localStorage: localDs,
+    notificationRepository: notifRepo,
+  );
 });
 
 final taskListProvider = StateNotifierProvider<TaskListNotifier, TaskListState>((ref) {
